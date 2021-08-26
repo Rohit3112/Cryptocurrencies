@@ -45,3 +45,56 @@ temp_table %>%
   mutate(symbol = paste0(symbol," ",logo)) %>% 
   select(name,symbol,price,percentage_24hr,percentage_7d,percentage_30d,Volume_24hr,market_cap) -> final_table
 
+#Top 10 coins plot
+crypto_listings %>% 
+  select(symbol,percentage_24hr, percentage_7d, percentage_30d) %>% 
+  slice(1:10) %>% 
+  rename(percentage_onemonth = percentage_30d) %>% 
+  gather(key = percentage, value = value, c(percentage_24hr,percentage_7d,percentage_onemonth)) %>% 
+  mutate(symbol = symbol %>% factor() %>% fct_inorder()) -> crypto_listings_1
+
+crypto_listings %>%
+  select(symbol,percentage_24hr, percentage_7d, percentage_30d) %>% 
+  slice(1:10) %>% 
+  mutate(x1 = seq(0.70,9.70, length.out = 10),
+         x2 = seq(1,10, length.out = 10),
+         x3 = seq(1.30,10.30, length.out = 10)) -> crypto_listings_plot_points 
+
+ggplot()+
+  geom_col(data = crypto_listings_1, aes(x=symbol, y=value,fill=percentage),position = "dodge") +
+  geom_segment(data=crypto_listings_plot_points, aes(x=x1, xend = x2, y=percentage_24hr, yend=percentage_7d),
+               size = 0.5, color="white",alpha=0.6) +
+  geom_segment(data=crypto_listings_plot_points, aes(x=x2, xend = x3, y=percentage_7d, yend=percentage_30d),
+               size = 0.5, color="white", alpha=0.6) +
+  geom_point(data = crypto_listings_1, aes(x=symbol, y=value, group=percentage),stat="identity",size = 0.8,
+             position = position_dodge(width = .9), color = ifelse(crypto_listings_1$value>0,"green","red")) +
+  scale_y_continuous(breaks = seq(round(min(crypto_listings_1$value), digits =-1),
+                                  round(max(crypto_listings_1$value), digits =-1), length.out = 9)) +
+  geom_smooth(method = "lm", alpha = 0.1, colour = "black", size = 0.5) +
+  scale_fill_manual(labels = c("24Hr %", "7 Days %", "1 Month %"), values = c("#F8766D", "#00BA38","#619CFF")) +
+  ylab("% Increase") +
+  ggtitle("Top 10 Cryptocurrencies") +
+  theme(plot.title = element_text(size = 15,
+                                  face = "bold",
+                                  colour = "white",
+                                  hjust = 0.5),
+        axis.title.y = element_text(size = 12,
+                                    face = "plain",
+                                    colour = "white"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(colour = "white"),
+        axis.text.y = element_text(colour = "white"),
+        legend.background = element_rect(fill = "#361752"),
+        legend.text = element_text(colour = "white"),
+        legend.key = element_rect(fill = "darkblue", color = NA),
+        legend.position = "bottom",
+        legend.direction ="horizontal",
+        legend.key.size = unit(0.7, "cm"),
+        legend.key.width = unit(0.7,"cm"),
+        panel.grid = element_line(colour = "#949494"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        legend.title = element_blank(),
+        panel.background = element_rect(fill = "#361752",color ="#6b4683",size= 1),
+        plot.background = element_rect(fill = "#361752",colour = NA)) -> plot 
+
