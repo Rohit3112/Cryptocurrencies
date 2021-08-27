@@ -98,3 +98,62 @@ ggplot()+
         panel.background = element_rect(fill = "#361752",color ="#6b4683",size= 1),
         plot.background = element_rect(fill = "#361752",colour = NA)) -> plot 
 
+#ohlc tables
+load_dot_env("av.env")
+
+url <- str_c("https://www.alphavantage.co/query?function=CRYPTO_INTRADAY","&symbol=",symbol,"&market=USD", 
+             "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+
+url1 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY","&symbol=",symbol,"&market=USD", 
+              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+
+url2 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_WEEKLY","&symbol=",symbol,"&market=USD", 
+              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+
+url3 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY","&symbol=",symbol,"&market=USD", 
+              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+
+one_hr <- read_csv(url)
+
+daily <- read_csv(url1)
+
+weekly <- read_csv(url2)
+
+monthly <- read_csv(url3)
+
+one_hr %>% 
+  slice(1:24) -> one_hr
+
+one_hr %>% 
+  clean_names() %>% 
+  mutate_if(is.numeric, funs(round(.,2))) -> one_hr_data
+
+daily %>% 
+  clean_names() %>% 
+  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+  mutate_if(is.numeric, funs(round(.,2))) %>% 
+  rename(open = "open_usd",
+         high = "high_usd",
+         low = "low_usd",
+         close = "close_usd") %>% 
+  slice(1:30) -> daily_data
+
+weekly %>% 
+  clean_names() %>% 
+  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+  mutate_if(is.numeric, funs(round(.,2))) %>% 
+  rename(open = "open_usd",
+         high = "high_usd",
+         low = "low_usd",
+         close = "close_usd") %>% 
+  slice(1:30) -> weekly_data
+
+monthly %>% 
+  clean_names() %>% 
+  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+  mutate_if(is.numeric, funs(round(.,2))) %>% 
+  rename(open = "open_usd",
+         high = "high_usd",
+         low = "low_usd",
+         close = "close_usd") -> monthly_data
+
