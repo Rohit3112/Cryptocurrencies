@@ -2,6 +2,19 @@ library(tidyverse)
 library(janitor)
 library(coinmarketcapr)
 library(dotenv)
+library(jsonlite)
+library(httr)
+library(htmlwidgets)
+library(sparkline)
+library(reshape2)
+library(shiny)
+library(shinydashboard)
+library(lubridate)
+library(scales)
+library(shinyWidgets)
+require(DT)
+library(dashboardthemes)
+library(shinythemes)
 
 load_dot_env(".env")
 
@@ -98,114 +111,319 @@ ggplot()+
         panel.background = element_rect(fill = "#361752",color ="#6b4683",size= 1),
         plot.background = element_rect(fill = "#361752",colour = NA)) -> plot 
 
-#ohlc tables
-load_dot_env("av.env")
+temp_table %>% 
+  mutate(logo = paste0('<img src=',link,' height="42" style = "margin-left: 20%;"></img>')) %>% 
+  mutate(market_cap = paste0("$", round(market_cap/1000000000,2), " B"),
+         Volume_24hr = paste0("$", round(Volume_24hr/1000000000,2), " B")) -> temp_table2
 
-url <- str_c("https://www.alphavantage.co/query?function=CRYPTO_INTRADAY","&symbol=",symbol,"&market=USD", 
-             "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-
-url1 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY","&symbol=",symbol,"&market=USD", 
-              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-
-url2 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_WEEKLY","&symbol=",symbol,"&market=USD", 
-              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-
-url3 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY","&symbol=",symbol,"&market=USD", 
-              "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-
-one_hr <- read_csv(url)
-
-daily <- read_csv(url1)
-
-weekly <- read_csv(url2)
-
-monthly <- read_csv(url3)
-
-one_hr %>% 
-  slice(1:24) -> one_hr
-
-one_hr %>% 
-  clean_names() %>% 
-  mutate_if(is.numeric, funs(round(.,2))) -> one_hr_data
-
-daily %>% 
-  clean_names() %>% 
-  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-  mutate_if(is.numeric, funs(round(.,2))) %>% 
-  rename(open = "open_usd",
-         high = "high_usd",
-         low = "low_usd",
-         close = "close_usd") %>% 
-  slice(1:30) -> daily_data
-
-weekly %>% 
-  clean_names() %>% 
-  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-  mutate_if(is.numeric, funs(round(.,2))) %>% 
-  rename(open = "open_usd",
-         high = "high_usd",
-         low = "low_usd",
-         close = "close_usd") %>% 
-  slice(1:30) -> weekly_data
-
-monthly %>% 
-  clean_names() %>% 
-  select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-  mutate_if(is.numeric, funs(round(.,2))) %>% 
-  rename(open = "open_usd",
-         high = "high_usd",
-         low = "low_usd",
-         close = "close_usd") -> monthly_data
-
-#candlestick charts (ohcl)
-candlestick_plot_func <- function(ohcl_data){
-  ohcl_data %>%
-    select(timestamp,open, high, low, volume) %>% 
-    mutate(id = row_number()) %>% 
-    arrange(desc(id)) %>% 
-    mutate(id = row_number()) -> candlestick_table
+#Shiny 
+ui <- dashboardPage(
+  dashboardHeader(title = "CryptoCurrencies" ),
   
-  candlestick_table %>% slice(-1) %>% pull(open) -> end_vect
+  ## Sidebar content
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Top Cryptocurrencies", tabName = "top_crypto", icon = icon("dashboard")),
+      menuItem("Historical Data", tabName = "hist_data", icon = icon("dashboard"))
+    )
+  ),
+  dashboardBody(
+    tags$head(tags$link(rel = "shortcut icon", href = "http://vaccaro.tech/favicon.ico")),
+    
+    shinyDashboardThemes(
+      theme = "grey_dark"
+    ),
+    
+    tabItems(
+      # dashboard content
+      tabItem(tabName = "top_crypto",
+              fluidRow(
+                valueBoxOutput("top1"),
+                valueBoxOutput("top2"),
+                valueBoxOutput("top3"),
+                valueBoxOutput("top4"),
+                valueBoxOutput("top5"),
+                valueBoxOutput("top6")
+              ),
+              fluidRow(
+                tabPanel("Visualization",
+                         fluidRow(
+                           column(6,
+                                  dataTableOutput("table"),style = "margin-left: 1.2%"),
+                           column(6,
+                                  plotOutput("ggp"),style = "margin-left: -1.5%")
+                         )
+                         
+                )
+              )
+      ),
+      tabItem(tabName = "hist_data",
+              fluidRow(
+                tabPanel("Plots",
+                         fluidRow(
+                           column(4,
+                                  searchInput(
+                                    inputId = "search", label = "Search CryptoCurrency",
+                                    placeholder = "Search",
+                                    btnSearch = icon("search"),
+                                    btnReset = icon("remove"),
+                                    width = "310px"
+                                  ), align = "center", style = "margin-top: 2%; font-size: 21px"),  
+                           valueBoxOutput("symb"),
+                           valueBoxOutput("cap")
+                         ),
+                         fluidRow(
+                           column(6,
+                                  plotOutput("hourly")),
+                           column(6,
+                                  plotOutput("daily"))
+                         ),br(),
+                         fluidRow(
+                           column(6,
+                                  plotOutput("weekly")),
+                           column(6,
+                                  plotOutput("monthly"))
+                         )
+                         
+                )
+              )
+      )
+    )
+  ))
+
+server <- function(input, output) {
   
-  candlestick_table %>% 
-    mutate(close = c(end_vect,end_vect[length(end_vect)])) %>% 
-    mutate(color = c("red",ifelse(diff(close) < 0,"green","red"))) -> candlestick_table
+  output$top1 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(1) %>% pull(logo),"   ",
+                        top6_movers %>% slice(1) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(1) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(1) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(1) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "purple"
+    )
+  })
   
-  candlestick_table %>% pull(timestamp) -> ts_onehr
-  candlestick_table %>% pull(id) -> id_onehr
+  output$top2 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(2) %>% pull(logo),"   ",
+                        top6_movers %>% slice(2) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(2) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(2) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(2) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "orange"
+    )
+  })
+  output$top3 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(3) %>% pull(logo),"   ",
+                        top6_movers %>% slice(3) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(3) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(3) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(3) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "red"
+    )
+  })
   
-  candlestick_table %>% 
-    select(timestamp,low,close,open,high,volume,id,color) %>% 
-    slice(-nrow(candlestick_table)) %>% 
-    ggplot() + 
-    geom_rect(aes(x = id,
-                  xmin = id - 0.25, # control bar gap width
-                  xmax = id + 0.25,
-                  ymin = close,
-                  ymax = open,fill = color)) +
-    geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
-    geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
-    coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
-    scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
-                       labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
-    geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low), 
-                 size=1, colour="red", linetype="solid") +
-    geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)), 
-                 size=1, colour="green", linetype="solid") +
-    xlab("Timestamp") +
-    ylab("Price($)") +
-    theme_bw() +
-    theme(panel.background = element_rect("#630094"),
-          panel.grid.major.x = element_blank(),
-          panel.grid.minor.x = element_blank(),
-          legend.position = "none",
-          plot.title = element_text(hjust = 0.5)) -> candlestick_plot
+  output$top4 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(4) %>% pull(logo),"   ",
+                        top6_movers %>% slice(4) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(4) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(4) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(4) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "blue"
+    )
+  })
   
-  candlestick_plot
+  output$top5 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(5) %>% pull(logo),"   ",
+                        top6_movers %>% slice(5) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(5) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(5) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(5) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "green"
+    )
+  })
+  
+  output$top6 <- renderValueBox({
+    valueBox(HTML(paste(top6_movers %>% slice(6) %>% pull(logo),"   ",
+                        top6_movers %>% slice(6) %>% pull(symbol),
+                        tags$span(top6_movers %>% slice(6) %>% pull(percentage_24hr), style ="float:right; font-size:75%"))),
+             HTML(paste(top6_movers %>% slice(6) %>% pull(name),br(),
+                        tags$span(top6_movers %>% slice(6) %>% pull(price), style="font-size: 105%; font-weight: 700")
+             )), color = "light-blue"
+    )
+  })
+  
+  output$table <- renderDataTable(final_table, escape = FALSE,
+                                  options = list(
+                                    autoWidth=TRUE,
+                                    paging=TRUE,
+                                    scrollX=TRUE,
+                                    columnDefs = list(list(targets = "all", searchable = FALSE)),
+                                    pageLength = 6,
+                                    filter = list(position = "top")
+                                  ))
+  
+  output$ggp <- renderPlot({
+    plot}, res = 100)
+  
+  #ohlc tables
+  symbol <- "ETH"
+  symb <- symbol
+  
+  load_dot_env("av.env")
+  
+  url <- str_c("https://www.alphavantage.co/query?function=CRYPTO_INTRADAY","&symbol=",symbol,"&market=USD", 
+               "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+  
+  url1 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY","&symbol=",symbol,"&market=USD", 
+                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+  
+  url2 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_WEEKLY","&symbol=",symbol,"&market=USD", 
+                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+  
+  url3 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY","&symbol=",symbol,"&market=USD", 
+                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+  
+  one_hr <- read_csv(url)
+  
+  daily <- read_csv(url1)
+  
+  weekly <- read_csv(url2)
+  
+  monthly <- read_csv(url3)
+  
+  one_hr %>% 
+    slice(1:24) -> one_hr
+  
+  one_hr %>% 
+    clean_names() %>% 
+    mutate_if(is.numeric, funs(round(.,2))) -> one_hr_data
+  
+  daily %>% 
+    clean_names() %>% 
+    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+    mutate_if(is.numeric, funs(round(.,2))) %>% 
+    rename(open = "open_usd",
+           high = "high_usd",
+           low = "low_usd",
+           close = "close_usd") %>% 
+    slice(1:30) -> daily_data
+  
+  weekly %>% 
+    clean_names() %>% 
+    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+    mutate_if(is.numeric, funs(round(.,2))) %>% 
+    rename(open = "open_usd",
+           high = "high_usd",
+           low = "low_usd",
+           close = "close_usd") %>% 
+    slice(1:30) -> weekly_data
+  
+  monthly %>% 
+    clean_names() %>% 
+    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
+    mutate_if(is.numeric, funs(round(.,2))) %>% 
+    rename(open = "open_usd",
+           high = "high_usd",
+           low = "low_usd",
+           close = "close_usd") -> monthly_data
+  
+  #candlestick charts (ohcl)
+  candlestick_plot_func <- function(ohcl_data){
+    ohcl_data %>%
+      select(timestamp,open, high, low, volume) %>% 
+      mutate(id = row_number()) %>% 
+      arrange(desc(id)) %>% 
+      mutate(id = row_number()) -> candlestick_table
+    
+    candlestick_table %>% slice(-1) %>% pull(open) -> end_vect
+    
+    candlestick_table %>% 
+      mutate(close = c(end_vect,end_vect[length(end_vect)])) %>% 
+      mutate(color = c("red",ifelse(diff(close) < 0,"green","red"))) -> candlestick_table
+    
+    candlestick_table %>% pull(timestamp) -> ts_onehr
+    candlestick_table %>% pull(id) -> id_onehr
+    
+    candlestick_table %>% 
+      select(timestamp,low,close,open,high,volume,id,color) %>% 
+      slice(-nrow(candlestick_table)) %>% 
+      ggplot() + 
+      geom_rect(aes(x = id,
+                    xmin = id - 0.25, # control bar gap width
+                    xmax = id + 0.25,
+                    ymin = close,
+                    ymax = open,fill = color)) +
+      geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
+      geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
+      coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
+      scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
+                         labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
+      geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low), 
+                   size=1, colour="red", linetype="solid") +
+      geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)), 
+                   size=1, colour="green", linetype="solid") +
+      xlab("Timestamp") +
+      ylab("Price($)") +
+      theme_bw() +
+      theme(panel.background = element_rect("#630094"),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.x = element_blank(),
+            legend.position = "none",
+            plot.title = element_text(hjust = 0.5)) -> candlestick_plot
+    
+    candlestick_plot
+  }
+  
+  candlestick_plot_func(one_hr_data) + ggtitle("Hourly Trend") -> candlestick_plot_onehr
+  candlestick_plot_func(daily_data) + ggtitle("Daily Trend") -> candlestick_plot_daily
+  candlestick_plot_func(weekly_data) + ggtitle("Weekly Trend") -> candlestick_plot_weekly
+  candlestick_plot_func(monthly_data) + ggtitle("Monthly Trend") -> candlestick_plot_monthly
+  
+  #
+  output$hourly <- renderPlot({
+    candlestick_plot_onehr}, res = 75)
+  
+  output$daily <- renderPlot({
+    candlestick_plot_daily}, res = 75)
+  
+  output$weekly <- renderPlot({
+    candlestick_plot_weekly}, res = 75)
+  
+  output$monthly <- renderPlot({
+    candlestick_plot_monthly}, res = 75)
+  
+  output$search_plot <- renderUI({
+    searchInput("search",
+                "Select Crypto", 
+                choices = symbols_vector,
+                multiple = FALSE)
+  })
+  
+  output$symb <- renderValueBox({
+    valueBox(HTML(paste(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(logo),
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(symbol), 
+                                  style ="float:right; font-size:190%; margin-top:3%; font-weight:bold; margin-right: 14%"),br(),
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(name), 
+                                  style ="font-size: 75%;font-weight: 600;margin-left: 14%;margin-top: 3%;"))),
+             HTML(paste("")),
+             color = "yellow"
+    )
+  })
+  
+  output$cap <- renderValueBox({
+    valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:60%; font-weight:400"),
+                        tags$span("24Hr Volume", style ="float:right; font-size:60%; margin-top:4%; font-weight:400; margin-right: 4%"),
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(Volume_24hr), style ="float: right;
+                                                                                                                            font-size: 75%;
+                                                                                                                            font-weight: 600;
+                                                                                                                            margin-right: 4%;
+                                                                                                                            margin-top: 3%;"))),
+             HTML(paste(tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(market_cap), style ="font-size: 170%; font-weight: bolder")
+             )), color = "yellow"
+    )
+  })
+  
 }
 
-candlestick_plot_func(one_hr_data) + ggtitle("Hourly Trend") -> candlestick_plot_onehr
-candlestick_plot_func(daily_data) + ggtitle("Daily Trend") -> candlestick_plot_daily
-candlestick_plot_func(weekly_data) + ggtitle("Weekly Trend") -> candlestick_plot_weekly
-candlestick_plot_func(monthly_data) + ggtitle("Monthly Trend") -> candlestick_plot_monthly
+shinyApp(ui,server)
 
