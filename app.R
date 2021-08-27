@@ -157,3 +157,55 @@ monthly %>%
          low = "low_usd",
          close = "close_usd") -> monthly_data
 
+#candlestick charts (ohcl)
+candlestick_plot_func <- function(ohcl_data){
+  ohcl_data %>%
+    select(timestamp,open, high, low, volume) %>% 
+    mutate(id = row_number()) %>% 
+    arrange(desc(id)) %>% 
+    mutate(id = row_number()) -> candlestick_table
+  
+  candlestick_table %>% slice(-1) %>% pull(open) -> end_vect
+  
+  candlestick_table %>% 
+    mutate(close = c(end_vect,end_vect[length(end_vect)])) %>% 
+    mutate(color = c("red",ifelse(diff(close) < 0,"green","red"))) -> candlestick_table
+  
+  candlestick_table %>% pull(timestamp) -> ts_onehr
+  candlestick_table %>% pull(id) -> id_onehr
+  
+  candlestick_table %>% 
+    select(timestamp,low,close,open,high,volume,id,color) %>% 
+    slice(-nrow(candlestick_table)) %>% 
+    ggplot() + 
+    geom_rect(aes(x = id,
+                  xmin = id - 0.25, # control bar gap width
+                  xmax = id + 0.25,
+                  ymin = close,
+                  ymax = open,fill = color)) +
+    geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
+    geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
+    coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
+    scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
+                       labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
+    geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low), 
+                 size=1, colour="red", linetype="solid") +
+    geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)), 
+                 size=1, colour="green", linetype="solid") +
+    xlab("Timestamp") +
+    ylab("Price($)") +
+    theme_bw() +
+    theme(panel.background = element_rect("#630094"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          legend.position = "none",
+          plot.title = element_text(hjust = 0.5)) -> candlestick_plot
+  
+  candlestick_plot
+}
+
+candlestick_plot_func(one_hr_data) + ggtitle("Hourly Trend") -> candlestick_plot_onehr
+candlestick_plot_func(daily_data) + ggtitle("Daily Trend") -> candlestick_plot_daily
+candlestick_plot_func(weekly_data) + ggtitle("Weekly Trend") -> candlestick_plot_weekly
+candlestick_plot_func(monthly_data) + ggtitle("Monthly Trend") -> candlestick_plot_monthly
+
