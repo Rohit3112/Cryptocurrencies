@@ -99,7 +99,7 @@ ggplot()+
         axis.title.x = element_blank(),
         axis.text.x = element_text(colour = "white"),
         axis.text.y = element_text(colour = "white"),
-        legend.background = element_rect(fill = "#361752"),
+        legend.background = element_rect(fill = "#343E48"),
         legend.text = element_text(colour = "white"),
         legend.key = element_rect(fill = "darkblue", color = NA),
         legend.position = "bottom",
@@ -110,8 +110,8 @@ ggplot()+
         panel.grid.minor.y = element_blank(),
         panel.grid.major.x = element_blank(),
         legend.title = element_blank(),
-        panel.background = element_rect(fill = "#361752",color ="#6b4683",size= 1),
-        plot.background = element_rect(fill = "#361752",colour = NA)) -> plot 
+        panel.background = element_rect(fill = "#343E48",color ="#46505A",size= 1),
+        plot.background = element_rect(fill = "#343E48",colour = NA)) -> plot 
 
 temp_table %>% 
   mutate(logo = paste0('<img src=',link,' height="42" style = "margin-left: 20%;"></img>')) %>% 
@@ -361,17 +361,30 @@ server <- function(input, output) {
       scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
                          labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
       geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low), 
-                   size=1, colour="red", linetype="solid") +
+                   size=0.8, colour="red", linetype="solid") +
       geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)), 
-                   size=1, colour="green", linetype="solid") +
+                   size=0.8, colour="green", linetype="solid") +
       xlab("Timestamp") +
       ylab("Price($)") +
       theme_bw() +
-      theme(panel.background = element_rect("#630094"),
+      theme(panel.background = element_rect(fill = "#433854",color ="#343E48",size= 1),
             panel.grid.major.x = element_blank(),
             panel.grid.minor.x = element_blank(),
+            panel.grid = element_line(colour = "#949494"),
             legend.position = "none",
-            plot.title = element_text(hjust = 0.5)) -> candlestick_plot
+            axis.title.y = element_text(size = 9,
+                                        face = "plain",
+                                        colour = "white"),
+            axis.title.x = element_text(size = 9,
+                                         face = "plain",
+                                         colour = "white"),
+            axis.text.x = element_text(colour = "white"),
+            axis.text.y = element_text(colour = "white"),
+            plot.background = element_rect(fill = "#3a4149",colour = NA),
+            plot.title = element_text(hjust = 0.5,
+                                      size = 15,
+                                      face = "bold", 
+                                      colour = "white")) -> candlestick_plot
     
     candlestick_plot
   }
