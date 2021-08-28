@@ -15,6 +15,8 @@ library(shinyWidgets)
 require(DT)
 library(dashboardthemes)
 library(shinythemes)
+library(Cairo)
+options(shiny.usecairo=T)
 
 load_dot_env(".env")
 
