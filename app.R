@@ -417,22 +417,22 @@ server <- function(input, output) {
   output$symb <- renderValueBox({
     valueBox(HTML(paste(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(logo),
                         tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(symbol), 
-                                  style ="float:right; font-size:190%; margin-top:3%; font-weight:bold; margin-right: 14%"),br(),
+                                  style ="float:right; font-size:100%; font-weight:bold; margin-right: 5%; margin-top: 1.5%"),br(),
                         tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(name), 
-                                  style ="font-size: 75%;font-weight: 600;margin-left: 14%;margin-top: 3%;"))),
+                                  style ="font-size: 75%;font-weight: 600;margin-left: 11%;margin-top: 3%;"))),
              HTML(paste("")),
              color = "yellow"
     )
   })
   
   output$cap <- renderValueBox({
-    valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:60%; font-weight:400"),
-                        tags$span("24Hr Volume", style ="float:right; font-size:60%; margin-top:4%; font-weight:400; margin-right: 4%"),
+    valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:73%; font-weight:500"),
+                        tags$span("24Hr Volume", style ="float:right; font-size:73%; margin-top:2%; font-weight:300; margin-right: 2%"),
                         tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(Volume_24hr), style ="float: right;
                                                                                                                             font-size: 75%;
                                                                                                                             font-weight: 600;
-                                                                                                                            margin-right: 4%;
-                                                                                                                            margin-top: 3%;"))),
+                                                                                                                            margin-right: 2%;
+                                                                                                                            margin-top: 2.5%;"))),
              HTML(paste(tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(market_cap), style ="font-size: 170%; font-weight: bolder")
              )), color = "yellow"
     )
