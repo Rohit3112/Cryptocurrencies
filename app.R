@@ -58,7 +58,11 @@ temp_table %>%
 temp_table %>% 
   mutate(logo = paste0('<img src=',link,' height="26"></img>')) %>% 
   mutate(symbol = paste0(symbol," ",logo)) %>% 
-  select(name,symbol,price,percentage_24hr,percentage_7d,percentage_30d,Volume_24hr,market_cap) -> final_table
+  select(name,symbol,price,percentage_24hr,percentage_7d,percentage_30d,Volume_24hr,market_cap) %>% 
+  mutate(Volume_24hr = ifelse(Volume_24hr>=1000000000,paste0("$",round(Volume_24hr/1000000000,1)," B"),
+                              paste0("$",round(Volume_24hr/1000000000,1)," M")),
+         market_cap = ifelse(market_cap>=1000000000,paste0("$",round(market_cap/1000000000,2)," B"),
+                             paste0("$",round(market_cap/1000000000,2)," M"))) -> final_table
 
 #Top 10 coins plot
 crypto_listings %>% 
@@ -86,8 +90,8 @@ ggplot()+
   scale_y_continuous(breaks = seq(round(min(crypto_listings_1$value), digits =-1),
                                   round(max(crypto_listings_1$value), digits =-1), length.out = 9)) +
   geom_smooth(method = "lm", alpha = 0.1, colour = "black", size = 0.5) +
-  scale_fill_manual(labels = c("24Hr %", "7 Days %", "1 Month %"), values = c("#F8766D", "#00BA38","#619CFF")) +
-  ylab("% Increase") +
+  scale_fill_manual(labels = c("24Hr %", "7 Days %", "1 Month %"), values = c("#D172A2", "#74EE90","#0CC1D5")) +
+  ylab("% Change") +
   ggtitle("Top 10 Cryptocurrencies") +
   theme(plot.title = element_text(size = 15,
                                   face = "bold",
@@ -254,15 +258,36 @@ server <- function(input, output) {
     )
   })
   
-  output$table <- renderDataTable(final_table, escape = FALSE,
+  output$table <- renderDataTable({
+                                  datatable(final_table %>% 
+                                    mutate(cf_24hr = ifelse(percentage_24hr<0,0,1),
+                                           cf_7d = ifelse(percentage_7d<0,0,1),
+                                           cf_30d = ifelse(percentage_30d<0,0,1)) %>% 
+                                    mutate(price = paste0("$",price),
+                                           percentage_24hr = ifelse(percentage_24hr>0,paste0("+",percentage_24hr,"%"),paste0(percentage_24hr,"%")),
+                                           percentage_7d = ifelse(percentage_7d>0,paste0("+",percentage_7d,"%"),paste0(percentage_7d,"%")),
+                                           percentage_30d = ifelse(percentage_30d>0,paste0("+",percentage_30d,"%"),paste0(percentage_30d,"%"))), 
+                                  escape = FALSE,
                                   options = list(
                                     autoWidth=TRUE,
                                     paging=TRUE,
                                     scrollX=TRUE,
-                                    columnDefs = list(list(targets = "all", searchable = FALSE)),
+                                    columnDefs = list(list(targets = "all", searchable = FALSE),
+                                                      list(visible= FALSE, targets=c(-1,-2,-3))),
                                     pageLength = 6,
-                                    filter = list(position = "top")
-                                  ))
+                                    filter = list(position = "top")),
+                                  colnames=c("Name", "Symbol", "Price($)", "24H Change", "7D Change", "30D Change", "24H Volume",
+                                             "Market Cap", "cf_24hr", "cf_7d", "cf_30d")) %>% 
+                                  formatStyle(
+                                  'percentage_24hr', 'cf_24hr',
+                                  color = styleEqual(c(0,1),values = c('#FF8789', 'lightgreen'))) %>% 
+                                  formatStyle(
+                                 'percentage_7d', 'cf_7d',
+                                  color = styleEqual(c(0,1),values = c('#FF8789', 'lightgreen'))) %>% 
+                                  formatStyle(
+                                  'percentage_30d', 'cf_30d',
+                                  color = styleEqual(c(0,1),values = c('#FF8789', 'lightgreen'))) 
+                                  })
   
   output$ggp <- renderPlot({
     plot}, res = 100)
@@ -341,10 +366,12 @@ server <- function(input, output) {
     
     candlestick_table %>% 
       mutate(close = c(end_vect,end_vect[length(end_vect)])) %>% 
-      mutate(color = c("red",ifelse(diff(close) < 0,"green","red"))) -> candlestick_table
+      mutate(color = c("#59FF3C",ifelse(diff(close) < 0,"#FE1A1E","#59FF3C"))) -> candlestick_table
     
     candlestick_table %>% pull(timestamp) -> ts_onehr
     candlestick_table %>% pull(id) -> id_onehr
+    candlestick_table %>% pull(color) -> plot_colors
+    plot_colors[1:length(plot_colors)-1] -> plot_colors
     
     candlestick_table %>% 
       select(timestamp,low,close,open,high,volume,id,color) %>% 
@@ -354,9 +381,9 @@ server <- function(input, output) {
                     xmin = id - 0.25, # control bar gap width
                     xmax = id + 0.25,
                     ymin = close,
-                    ymax = open,fill = color)) +
-      geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
-      geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
+                    ymax = open), fill = plot_colors) +
+      # geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
+      # geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
       coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
       scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
                          labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
