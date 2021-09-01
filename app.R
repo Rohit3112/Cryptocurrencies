@@ -173,12 +173,15 @@ ui <- dashboardPage(
                          fluidRow(
                            column(4,
                                   searchInput(
-                                    inputId = "search", label = "Search CryptoCurrency",
+                                    inputId = "search", label = h3("Search CryptoCurrency",style={'margin-left: -30%;
+                                                                                                   color: white;
+                                                                                                   font-weight: 600;
+                                                                                                   font-size: 100%;'}),
                                     placeholder = "Search",
                                     btnSearch = icon("search"),
                                     btnReset = icon("remove"),
                                     width = "310px"
-                                  ), align = "center", style = "margin-top: 2%; font-size: 21px"),  
+                                  ), align = "center", style = "margin-top: 0.1%; font-size: 21px"),  
                            withSpinner(tagList(
                            valueBoxOutput("symb"),
                            valueBoxOutput("cap")))
