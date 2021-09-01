@@ -15,6 +15,7 @@ library(shinyWidgets)
 require(DT)
 library(dashboardthemes)
 library(shinythemes)
+library(shinycssloaders)
 library(Cairo)
 options(shiny.usecairo=T)
 
@@ -142,14 +143,17 @@ ui <- dashboardPage(
     
     tabItems(
       # dashboard content
-      tabItem(tabName = "top_crypto",
+      tabItem(tabName = "top_crypto", 
+              fluidRow(titlePanel(h1("Top Movers",
+                            style={'font-size: 140%; margin-top: -2%; margin-left: 45%; font-weight: bolder; color: white;'}))),
               fluidRow(
+                withSpinner(tagList(
                 valueBoxOutput("top1"),
                 valueBoxOutput("top2"),
                 valueBoxOutput("top3"),
                 valueBoxOutput("top4"),
                 valueBoxOutput("top5"),
-                valueBoxOutput("top6")
+                valueBoxOutput("top6")))
               ),
               fluidRow(
                 tabPanel("Visualization",
@@ -158,7 +162,7 @@ ui <- dashboardPage(
                                   dataTableOutput("table"),style = "margin-left: 1.2%"),
                            column(6,
                                   plotOutput("ggp"),style = "margin-left: -1.5%")
-                         )
+                         ) 
                          
                 )
               )
@@ -175,8 +179,9 @@ ui <- dashboardPage(
                                     btnReset = icon("remove"),
                                     width = "310px"
                                   ), align = "center", style = "margin-top: 2%; font-size: 21px"),  
+                           withSpinner(tagList(
                            valueBoxOutput("symb"),
-                           valueBoxOutput("cap")
+                           valueBoxOutput("cap")))
                          ),
                          fluidRow(
                            column(6,
@@ -198,7 +203,7 @@ ui <- dashboardPage(
   ))
 
 server <- function(input, output) {
-  
+
   output$top1 <- renderValueBox({
     valueBox(HTML(paste(top6_movers %>% slice(1) %>% pull(logo),"   ",
                         top6_movers %>% slice(1) %>% pull(symbol),
@@ -382,8 +387,6 @@ server <- function(input, output) {
                     xmax = id + 0.25,
                     ymin = close,
                     ymax = open), fill = plot_colors) +
-      # geom_point(aes(x=id,y=high),size=1.24, linetype = "solid", color = "green") +
-      # geom_point(aes(x=id,y=low),size=1.24, linetype = "solid", color = "red") +
       coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
       scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
                          labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
