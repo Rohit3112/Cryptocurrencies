@@ -43,7 +43,8 @@ cryptos %>%
   as_tibble() -> crypto_listings
 
 crypto_listings %>% 
-  mutate(link = paste0("https://s2.coinmarketcap.com/static/img/coins/64x64/",id,".png")) -> temp_table
+  mutate(link = paste0("https://s2.coinmarketcap.com/static/img/coins/64x64/",id,".png")) %>% 
+  mutate(symbol_low = tolower(symbol)) -> temp_table
 
 #top movers table
 temp_table %>% 
@@ -173,10 +174,11 @@ ui <- dashboardPage(
                          fluidRow(
                            column(4,
                                   searchInput(
-                                    inputId = "search", label = h3("Search CryptoCurrency",style={'margin-left: -30%;
+                                    inputId = "search", value = "BTC",
+                                                        label = h3("Enter Crypto Symbol",style={'margin-left: -30%;
                                                                                                    color: white;
                                                                                                    font-weight: 600;
-                                                                                                   font-size: 100%;'}),
+                                                                                                   font-size: 114%;'}),
                                     placeholder = "Search",
                                     btnSearch = icon("search"),
                                     btnReset = icon("remove"),
@@ -205,8 +207,9 @@ ui <- dashboardPage(
     )
   ))
 
-server <- function(input, output) {
+server <- function(input, output, session) {
 
+  ### Top Cryptocurrencies Panel
   output$top1 <- renderValueBox({
     valueBox(HTML(paste(top6_movers %>% slice(1) %>% pull(logo),"   ",
                         top6_movers %>% slice(1) %>% pull(symbol),
@@ -300,102 +303,55 @@ server <- function(input, output) {
   output$ggp <- renderPlot({
     plot}, res = 100)
   
-  #ohlc tables
-  symbol <- "ETH"
-  symb <- symbol
+  ### Historical Data Panel
+  observeEvent(input$search,{
+    updateSearchInput(
+      session = session,
+      inputId = "search"
+    )
+  }, ignoreInit = TRUE)
+  
+  symbol <- reactive({
+    input$search -> symbol
+    symbol
+  })
   
   load_dot_env("av.env")
-  
-  url <- str_c("https://www.alphavantage.co/query?function=CRYPTO_INTRADAY","&symbol=",symbol,"&market=USD", 
-               "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-  
-  url1 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY","&symbol=",symbol,"&market=USD", 
-                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-  
-  url2 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_WEEKLY","&symbol=",symbol,"&market=USD", 
-                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-  
-  url3 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY","&symbol=",symbol,"&market=USD", 
-                "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
-  
-  one_hr <- read_csv(url)
-  
-  daily <- read_csv(url1)
-  
-  weekly <- read_csv(url2)
-  
-  monthly <- read_csv(url3)
-  
-  one_hr %>% 
-    slice(1:24) -> one_hr
-  
-  one_hr %>% 
-    clean_names() %>% 
-    mutate_if(is.numeric, funs(round(.,2))) -> one_hr_data
-  
-  daily %>% 
-    clean_names() %>% 
-    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-    mutate_if(is.numeric, funs(round(.,2))) %>% 
-    rename(open = "open_usd",
-           high = "high_usd",
-           low = "low_usd",
-           close = "close_usd") %>% 
-    slice(1:30) -> daily_data
-  
-  weekly %>% 
-    clean_names() %>% 
-    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-    mutate_if(is.numeric, funs(round(.,2))) %>% 
-    rename(open = "open_usd",
-           high = "high_usd",
-           low = "low_usd",
-           close = "close_usd") %>% 
-    slice(1:30) -> weekly_data
-  
-  monthly %>% 
-    clean_names() %>% 
-    select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>% 
-    mutate_if(is.numeric, funs(round(.,2))) %>% 
-    rename(open = "open_usd",
-           high = "high_usd",
-           low = "low_usd",
-           close = "close_usd") -> monthly_data
-  
-  #candlestick charts (ohcl)
+
+  #candlestick chart reactives (ohcl)
   candlestick_plot_func <- function(ohcl_data){
     ohcl_data %>%
-      select(timestamp,open, high, low, volume) %>% 
-      mutate(id = row_number()) %>% 
-      arrange(desc(id)) %>% 
+      select(timestamp,open, high, low, volume) %>%
+      mutate(id = row_number()) %>%
+      arrange(desc(id)) %>%
       mutate(id = row_number()) -> candlestick_table
-    
+
     candlestick_table %>% slice(-1) %>% pull(open) -> end_vect
-    
-    candlestick_table %>% 
-      mutate(close = c(end_vect,end_vect[length(end_vect)])) %>% 
+
+    candlestick_table %>%
+      mutate(close = c(end_vect,end_vect[length(end_vect)])) %>%
       mutate(color = c("#59FF3C",ifelse(diff(close) < 0,"#FE1A1E","#59FF3C"))) -> candlestick_table
-    
+
     candlestick_table %>% pull(timestamp) -> ts_onehr
     candlestick_table %>% pull(id) -> id_onehr
     candlestick_table %>% pull(color) -> plot_colors
     plot_colors[1:length(plot_colors)-1] -> plot_colors
-    
-    candlestick_table %>% 
-      select(timestamp,low,close,open,high,volume,id,color) %>% 
-      slice(-nrow(candlestick_table)) %>% 
-      ggplot() + 
+
+    candlestick_table %>%
+      select(timestamp,low,close,open,high,volume,id,color) %>%
+      slice(-nrow(candlestick_table)) %>%
+      ggplot() +
       geom_rect(aes(x = id,
                     xmin = id - 0.25, # control bar gap width
                     xmax = id + 0.25,
                     ymin = close,
                     ymax = open), fill = plot_colors) +
       coord_cartesian(xlim = c(min(candlestick_table$id),max(candlestick_table$id))) +
-      scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5), 
+      scale_x_continuous(breaks = seq(min(id_onehr), max(id_onehr), length.out = 5),
                          labels = seq(min(ts_onehr), max(ts_onehr), length.out = 5)) +
-      geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low), 
+      geom_segment(aes(x=id, xend=id, y=ifelse(open>close,close,open), yend=low),
                    size=0.8, colour="red", linetype="solid") +
-      geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)), 
+      geom_segment(aes(x=id, xend=id, y=high, yend=ifelse(open<close,close,open)),
                    size=0.8, colour="green", linetype="solid") +
       xlab("Timestamp") +
       ylab("Price($)") +
@@ -416,61 +372,204 @@ server <- function(input, output) {
             plot.background = element_rect(fill = "#3a4149",colour = NA),
             plot.title = element_text(hjust = 0.5,
                                       size = 15,
-                                      face = "bold", 
+                                      face = "bold",
                                       colour = "white")) -> candlestick_plot
-    
+
     candlestick_plot
   }
   
-  candlestick_plot_func(one_hr_data) + ggtitle("Hourly Trend") -> candlestick_plot_onehr
-  candlestick_plot_func(daily_data) + ggtitle("Daily Trend") -> candlestick_plot_daily
-  candlestick_plot_func(weekly_data) + ggtitle("Weekly Trend") -> candlestick_plot_weekly
-  candlestick_plot_func(monthly_data) + ggtitle("Monthly Trend") -> candlestick_plot_monthly
-  
-  #
-  output$hourly <- renderPlot({
-    candlestick_plot_onehr}, res = 75)
-  
-  output$daily <- renderPlot({
-    candlestick_plot_daily}, res = 75)
-  
-  output$weekly <- renderPlot({
-    candlestick_plot_weekly}, res = 75)
-  
-  output$monthly <- renderPlot({
-    candlestick_plot_monthly}, res = 75)
-  
-  output$search_plot <- renderUI({
-    searchInput("search",
-                "Select Crypto", 
-                choices = symbols_vector,
-                multiple = FALSE)
+  candlestick_plot_onehr <- reactive({
+    url <- str_c("https://www.alphavantage.co/query?function=CRYPTO_INTRADAY","&symbol=",symbol(),"&market=USD",
+                 "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+    
+    one_hr <- read_csv(url)
+    
+    one_hr %>%
+      slice(1:24) -> one_hr
+    
+    one_hr %>%
+      clean_names() %>%
+      mutate_if(is.numeric, funs(round(.,2))) -> one_hr_data
+    
+    candlestick_plot_func(one_hr_data) + ggtitle("Hourly Trend") -> candlestick_plot_onehr
+    candlestick_plot_onehr
   })
   
+  candlestick_plot_daily <- reactive({
+    url1 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY","&symbol=",symbol(),"&market=USD",
+                  "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+    
+    daily <- read_csv(url1)
+    
+    daily %>%
+      clean_names() %>%
+      select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>%
+      mutate_if(is.numeric, funs(round(.,2))) %>%
+      rename(open = "open_usd",
+             high = "high_usd",
+             low = "low_usd",
+             close = "close_usd") %>%
+      slice(1:30) -> daily_data
+    
+    candlestick_plot_func(daily_data) + ggtitle("Daily Trend") -> candlestick_plot_daily
+    candlestick_plot_daily
+  })
+  
+  candlestick_plot_weekly <- reactive({
+    url2 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_WEEKLY","&symbol=",symbol(),"&market=USD",
+                  "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+    
+    weekly <- read_csv(url2)
+    
+    weekly %>%
+      clean_names() %>%
+      select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>%
+      mutate_if(is.numeric, funs(round(.,2))) %>%
+      rename(open = "open_usd",
+             high = "high_usd",
+             low = "low_usd",
+             close = "close_usd") %>%
+      slice(1:30) -> weekly_data
+    
+    candlestick_plot_func(weekly_data) + ggtitle("Weekly Trend") -> candlestick_plot_weekly
+    candlestick_plot_weekly
+  })
+  
+  candlestick_plot_monthly <- reactive({
+    url3 <- str_c("https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY","&symbol=",symbol(),"&market=USD",
+                  "&interval=60min", "&apikey=", Sys.getenv("AV_KEY"), "&datatype=csv")
+    
+    monthly <- read_csv(url3)
+    
+    monthly %>%
+      clean_names() %>%
+      select(timestamp, open_usd, high_usd, low_usd, close_usd, volume) %>%
+      mutate_if(is.numeric, funs(round(.,2))) %>%
+      rename(open = "open_usd",
+             high = "high_usd",
+             low = "low_usd",
+             close = "close_usd") -> monthly_data
+    
+    candlestick_plot_func(monthly_data) + ggtitle("Monthly Trend") -> candlestick_plot_monthly
+    candlestick_plot_monthly
+  })
+
+  #error plot functions
+  error_plot_hdna <- function(){
+    text = paste("\n     Data Not Available \n",
+                 "    Please try another Symbol \n")
+    ggplot() + 
+      annotate("text", x = 4, y = 25, size=8, label = text, color = "white") + 
+      theme_void() +
+      theme(panel.background = element_rect(fill = "#2D3741",color ="#2D3741",size= 1),
+            plot.background = element_rect(fill = "#2D3741",colour = NA))
+  }
+  
+  error_plot_timelimit <- function(){
+    text = paste("\n   Search limit exceeded! \n",
+                 "   Please try again after 30 seconds \n")
+    ggplot() + 
+      annotate("text", x = 4, y = 25, size=8, label = text, color = "white") + 
+      theme_void() +
+      theme(panel.background = element_rect(fill = "#2D3741",color ="#2D3741",size= 1),
+            plot.background = element_rect(fill = "#2D3741",colour = NA))
+  }
+  
+  #Rendering Plots
+  output$hourly <- renderPlot({
+    tryCatch({
+      candlestick_plot_onehr()
+    }, error = function(e) {
+      symbol() -> symb
+      if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T){
+      error_plot_timelimit()
+      } else {
+        error_plot_hdna ()
+      }
+      
+    }, silent=TRUE)}, res = 75)
+
+  output$daily <- renderPlot({
+    tryCatch({
+      candlestick_plot_daily()
+    }, error = function(e) {
+      symbol() -> symb
+      if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T){
+        error_plot_timelimit()
+      } else {
+        error_plot_hdna ()
+      }
+    }, silent=TRUE)}, res = 75)
+
+  output$weekly <- renderPlot({
+    tryCatch({
+      candlestick_plot_weekly()
+    }, error = function(e) {
+      symbol() -> symb
+      if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T){
+        error_plot_timelimit()
+      } else {
+        error_plot_hdna ()
+      }
+    }, silent=TRUE)}, res = 75)
+
+  output$monthly <- renderPlot({
+    tryCatch({
+      candlestick_plot_monthly()
+    }, error = function(e) {
+      symbol() -> symb
+      if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T){
+        error_plot_timelimit()
+      } else {
+        error_plot_hdna ()
+      }
+    }, silent=TRUE)}, res = 75)
+
+  #Rendering Value Boxes
   output$symb <- renderValueBox({
-    valueBox(HTML(paste(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(logo),
-                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(symbol), 
+    symbol() -> symb
+    tolower(symb) -> symb_lower
+    
+    if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T) {
+    valueBox(HTML(paste(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% pull(logo),
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% pull(symbol),
                                   style ="float:right; font-size:100%; font-weight:bold; margin-right: 5%; margin-top: 1.5%"),br(),
-                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(name), 
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% pull(name),
                                   style ="font-size: 75%;font-weight: 600;margin-left: 11%;margin-top: 3%;"))),
              HTML(paste("")),
              color = "yellow"
     )
+    } else {
+      valueBox(value = "", 
+               subtitle =  HTML(paste(tags$span("Enter Valid Symbol!", style ="font-weight: 600; margin-left: 35%;"))), 
+               color = "navy")
+    }
   })
-  
+
   output$cap <- renderValueBox({
+    symbol() -> symb
+    tolower(symb) -> symb_lower
+    
+    if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T) {
     valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:73%; font-weight:500"),
                         tags$span("24Hr Volume", style ="float:right; font-size:73%; margin-top:2%; font-weight:300; margin-right: 2%"),
-                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(Volume_24hr), style ="float: right;
+                        tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% 
+                                                                                                    pull(Volume_24hr), style ="float: right;
                                                                                                                             font-size: 75%;
                                                                                                                             font-weight: 600;
                                                                                                                             margin-right: 2%;
                                                                                                                             margin-top: 2.5%;"))),
-             HTML(paste(tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb)) %>% pull(market_cap), style ="font-size: 170%; font-weight: bolder")
+             HTML(paste(tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% 
+                                                                                              pull(market_cap), style ="font-size: 170%; font-weight: bolder")
              )), color = "yellow"
     )
-  })
-  
+    } else {
+      valueBox(value = "", 
+               subtitle =  HTML(paste(tags$span("Enter Valid Symbol!", style ="font-weight: 600; margin-left: 35%;"))), 
+               color = "navy")
+    }
+})
+
 }
 
 shinyApp(ui,server)
