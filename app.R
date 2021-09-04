@@ -19,6 +19,7 @@ library(shinycssloaders)
 library(Cairo)
 options(shiny.usecairo=T)
 
+
 load_dot_env(".env")
 
 coinmarketcapr::setup(Sys.getenv("COIN_MARKETCAPR_API"))
@@ -551,14 +552,14 @@ server <- function(input, output, session) {
     tolower(symb) -> symb_lower
     
     if(symb %in% temp_table$symbol==T | symb %in% temp_table$symbol_low==T) {
-    valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:73%; font-weight:500"),
-                        tags$span("24Hr Volume", style ="float:right; font-size:73%; margin-top:2%; font-weight:300; margin-right: 2%"),
+    valueBox(HTML(paste(tags$span("Market Capital", style ="font-size:70%; font-weight:500"),
+                        tags$span("24Hr Volume", style ="float:right; font-size:65%; margin-top:3.2%; font-weight:300; margin-right: 2%"),
                         tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% 
                                                                                                     pull(Volume_24hr), style ="float: right;
                                                                                                                             font-size: 75%;
                                                                                                                             font-weight: 600;
-                                                                                                                            margin-right: 2%;
-                                                                                                                            margin-top: 2.5%;"))),
+                                                                                                                            margin-right: 11%;
+                                                                                                                            margin-top: 3.5%;"))),
              HTML(paste(tags$span(temp_table2 %>% slice(which(temp_table$symbol==symb|temp_table$symbol_low==symb_lower)) %>% 
                                                                                               pull(market_cap), style ="font-size: 170%; font-weight: bolder")
              )), color = "yellow"
